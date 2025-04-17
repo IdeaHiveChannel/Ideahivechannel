@@ -7,6 +7,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from config import X_BEARER_TOKEN, PEXELS_API_KEY, YOUTUBE_API_KEY
+from youtube_api import get_authenticated_service, upload_video
 
 # Retry decorator for robustness
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type((aiohttp.ClientError, HttpError)))
@@ -40,43 +41,14 @@ async def fetch_pexels_video(session, topic):
             final_video.write_videofile(output_file, codec="libx264")
             return output_file
 
-def initialize_youtube_service():
-    return build('youtube', 'v3', developerKey=YOUTUBE_API_KEY)
-
-@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10), retry=retry_if_exception_type(HttpError))
-def upload_to_youtube(youtube, video_file, topic):
-    if YOUTUBE_API_KEY == "YOUR_YOUTUBE_API_KEY_HERE":
-        print(f"\nUploading {video_file} about {topic} to YouTube (simulation mode)")
-        time.sleep(1)
-        print("Success! Video would be uploaded in production mode")
-        return
-    else:
-        request_body = {
-            'snippet': {
-                'title': f"Understanding {topic} - Trending Topic Analysis",
-                'description': f"An in-depth look at why {topic} is trending today",
-                'tags': [topic, 'trending', 'analysis'],
-                'categoryId': '22'  # People & Blogs
-            },
-            'status': {'privacyStatus': 'public'}
-        }
-        media_body = {'media_body': video_file}
-        request = youtube.videos().insert(
-            part='snippet,status',
-            body=request_body,
-            media_body=media_body
-        )
-        response = request.execute()
-        print(f"Video uploaded successfully: {response['id']}")
-
 async def main():
     print("=== YouTube Automation Tool ===\n")
     async with aiohttp.ClientSession() as session:
         trending_topic = await fetch_trending_topics(session)
         print(f"Trending Topic: {trending_topic}")
         video_file = await fetch_pexels_video(session, trending_topic)
-        youtube = initialize_youtube_service()
-        upload_to_youtube(youtube, video_file, trending_topic)
+        youtube = get_authenticated_service()
+        upload_video(youtube, video_file, f"Understanding {trending_topic}", f"An in-depth look at why {trending_topic} is trending today", 'public')
     print("\n=== Automation Complete ===")
 
 if __name__ == "__main__":
